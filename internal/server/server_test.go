@@ -64,6 +64,43 @@ func TestNewAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestIndexReturnsHTMLPanelAndJSONFallback(t *testing.T) {
+	t.Parallel()
+
+	srv := New(nil, nil, nil, Options{})
+	handler := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("index expected 200, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
+		t.Fatalf("index expected html content-type, got %q", got)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "gostats 控制面板") {
+		t.Fatalf("index page missing title")
+	}
+	if !strings.Contains(body, openSourceRepoURL) {
+		t.Fatalf("index page missing repo url")
+	}
+	if !strings.Contains(body, "/stats/steam2weekstime/") {
+		t.Fatalf("index page missing steam2weekstime endpoint hint")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/?format=json", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("index json expected 200, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("index json expected application/json, got %q", got)
+	}
+}
+
 func TestHandlerOptionsCORS(t *testing.T) {
 	t.Parallel()
 

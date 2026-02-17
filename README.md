@@ -8,6 +8,7 @@
 
 - `GET /stats/:source/:key` 单指标接口（兼容 substats 风格）
 - `GET /stats.json` 标准化数组接口（适合前端一次性拉取）
+- `GET /` 可视化导航面板（可直接填写 GitHub/Steam 参数并组装 URL）
 - 支持 GitHub followers
 - 支持 Steam 游戏总数、总游戏时长、近 2 周游戏时长
 - 支持 Spotify 当前播放/最近播放回退、收藏歌曲总数

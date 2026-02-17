@@ -73,22 +73,35 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("format")), "json") {
+		s.indexJSONResponse(w)
+		return
+	}
+
+	writeIndexPage(w)
+}
+
+func indexEndpoints() []string {
+	return []string{
+		"/healthz",
+		"/spotify/auth/start",
+		"/spotify/auth/callback",
+		"/spotify/auth/status",
+		"/stats/github/:username",
+		"/stats/steamgames/:steamid_or_vanity",
+		"/stats/steamtime/:steamid_or_vanity",
+		"/stats/steam2weekstime/:steamid_or_vanity",
+		"/stats/spotifyplaying/:key",
+		"/stats/spotifysaved/:key",
+		"/stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key",
+	}
+}
+
+func (s *Server) indexJSONResponse(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":        "gostats",
 		"description": "Stat endpoints for static blog clients",
-		"endpoints": []string{
-			"GET /healthz",
-			"GET /spotify/auth/start",
-			"GET /spotify/auth/callback",
-			"GET /spotify/auth/status",
-			"GET /stats/github/:username",
-			"GET /stats/steamgames/:steamid_or_vanity",
-			"GET /stats/steamtime/:steamid_or_vanity",
-			"GET /stats/steam2weekstime/:steamid_or_vanity",
-			"GET /stats/spotifyplaying/:key",
-			"GET /stats/spotifysaved/:key",
-			"GET /stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key",
-		},
+		"endpoints":   indexEndpoints(),
 	})
 }
 
