@@ -177,8 +177,8 @@ func TestBatchStatsValidationAndErrorStats(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &items); err != nil {
 		t.Fatalf("decode batch stats: %v", err)
 	}
-	if len(items) != 4 {
-		t.Fatalf("expected 4 stats items, got %d", len(items))
+	if len(items) != 5 {
+		t.Fatalf("expected 5 stats items, got %d", len(items))
 	}
 	for _, item := range items {
 		if failed, _ := item["failed"].(bool); !failed {
@@ -202,6 +202,7 @@ func TestStatsBySourceErrorPayload(t *testing.T) {
 	for _, path := range []string{
 		"/stats/github/%2520",
 		"/stats/steamgames/%2520",
+		"/stats/steam2weekstime/%2520",
 		"/stats/spotifyplaying/me",
 		"/stats/spotifysaved/me",
 	} {

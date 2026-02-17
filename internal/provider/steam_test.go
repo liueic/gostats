@@ -21,7 +21,7 @@ func TestSteamOwnedGamesSummaryWithSteamID(t *testing.T) {
 		if q.Get("steamid") != "76561198000000000" {
 			t.Fatalf("unexpected steamid: %s", q.Get("steamid"))
 		}
-		_, _ = w.Write([]byte(`{"response":{"game_count":2,"games":[{"playtime_forever":30},{"playtime_forever":90}]}}`))
+		_, _ = w.Write([]byte(`{"response":{"game_count":2,"games":[{"playtime_forever":30,"playtime_2weeks":10},{"playtime_forever":90,"playtime_2weeks":20}]}}`))
 	}))
 	defer ts.Close()
 
@@ -32,7 +32,7 @@ func TestSteamOwnedGamesSummaryWithSteamID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OwnedGamesSummary returned error: %v", err)
 	}
-	if summary.GameCount != 2 || summary.TotalMinutes != 120 {
+	if summary.GameCount != 2 || summary.TotalMinutes != 120 || summary.RecentMinutes != 30 {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 }
@@ -51,7 +51,7 @@ func TestSteamOwnedGamesSummaryWithVanity(t *testing.T) {
 			if q.Get("steamid") != "76561198000000000" {
 				t.Fatalf("unexpected steamid after resolve: %s", q.Get("steamid"))
 			}
-			_, _ = w.Write([]byte(`{"response":{"game_count":1,"games":[{"playtime_forever":5}]}}`))
+			_, _ = w.Write([]byte(`{"response":{"game_count":1,"games":[{"playtime_forever":5,"playtime_2weeks":2}]}}`))
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -65,7 +65,7 @@ func TestSteamOwnedGamesSummaryWithVanity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OwnedGamesSummary returned error: %v", err)
 	}
-	if summary.SteamID != "76561198000000000" || summary.GameCount != 1 || summary.TotalMinutes != 5 {
+	if summary.SteamID != "76561198000000000" || summary.GameCount != 1 || summary.TotalMinutes != 5 || summary.RecentMinutes != 2 {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 	if step != 2 {

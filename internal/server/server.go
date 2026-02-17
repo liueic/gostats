@@ -84,6 +84,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			"GET /stats/github/:username",
 			"GET /stats/steamgames/:steamid_or_vanity",
 			"GET /stats/steamtime/:steamid_or_vanity",
+			"GET /stats/steam2weekstime/:steamid_or_vanity",
 			"GET /stats/spotifyplaying/:key",
 			"GET /stats/spotifysaved/:key",
 			"GET /stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key",
@@ -127,6 +128,8 @@ func (s *Server) handleStatsBySource(w http.ResponseWriter, r *http.Request) {
 		stat = s.steamGamesStat(r, key)
 	case "steamtime":
 		stat = s.steamPlaytimeStat(r, key)
+	case "steam2weekstime":
+		stat = s.steamRecentPlaytimeStat(r, key)
 	case "spotifyplaying":
 		stat = s.spotifyPlayingStat(r, key)
 	case "spotifysaved":
@@ -153,7 +156,7 @@ func (s *Server) handleBatchStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats := make([]model.StatResponse, 0, 5)
+	stats := make([]model.StatResponse, 0, 6)
 	if githubKey != "" {
 		stats = append(stats, s.githubFollowersStat(r, githubKey))
 	}
@@ -164,12 +167,15 @@ func (s *Server) handleBatchStats(w http.ResponseWriter, r *http.Request) {
 			stats = append(stats,
 				newErrStat("steamgames", steamKey, "games", "Steam Games", "games", err),
 				newErrStat("steamtime", steamKey, "playtime", "Steam Playtime", "hours", err),
+				newErrStat("steam2weekstime", steamKey, "playtime_2weeks", "Steam Playtime (2 Weeks)", "hours", err),
 			)
 		} else {
 			hours := round1(float64(summary.TotalMinutes) / 60.0)
+			recentHours := round1(float64(summary.RecentMinutes) / 60.0)
 			stats = append(stats,
 				newOKStat("steamgames", steamKey, "games", "Steam Games", summary.GameCount, "games"),
 				newOKStat("steamtime", steamKey, "playtime", "Steam Playtime", hours, "hours"),
+				newOKStat("steam2weekstime", steamKey, "playtime_2weeks", "Steam Playtime (2 Weeks)", recentHours, "hours"),
 			)
 		}
 	}
@@ -207,6 +213,15 @@ func (s *Server) steamPlaytimeStat(r *http.Request, key string) model.StatRespon
 	}
 	hours := round1(float64(summary.TotalMinutes) / 60.0)
 	return newOKStat("steamtime", key, "playtime", "Steam Playtime", hours, "hours")
+}
+
+func (s *Server) steamRecentPlaytimeStat(r *http.Request, key string) model.StatResponse {
+	summary, err := s.steamSummaryCached(r, key)
+	if err != nil {
+		return newErrStat("steam2weekstime", key, "playtime_2weeks", "Steam Playtime (2 Weeks)", "hours", err)
+	}
+	recentHours := round1(float64(summary.RecentMinutes) / 60.0)
+	return newOKStat("steam2weekstime", key, "playtime_2weeks", "Steam Playtime (2 Weeks)", recentHours, "hours")
 }
 
 func (s *Server) spotifyPlayingStat(r *http.Request, key string) model.StatResponse {

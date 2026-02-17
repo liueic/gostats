@@ -9,7 +9,7 @@
 - `GET /stats/:source/:key` 单指标接口（兼容 substats 风格）
 - `GET /stats.json` 标准化数组接口（适合前端一次性拉取）
 - 支持 GitHub followers
-- 支持 Steam 游戏总数和总游戏时长
+- 支持 Steam 游戏总数、总游戏时长、近 2 周游戏时长
 - 支持 Spotify 当前播放/最近播放回退、收藏歌曲总数
 - 内置 Spotify OAuth 首次授权流程（服务端自动换取并持久化 refresh token）
 - 内置短 TTL 内存缓存，降低外部 API 限流风险
@@ -22,6 +22,7 @@
 GET /stats/github/:username
 GET /stats/steamgames/:steamid_or_vanity
 GET /stats/steamtime/:steamid_or_vanity
+GET /stats/steam2weekstime/:steamid_or_vanity
 GET /stats/spotifyplaying/:key
 GET /stats/spotifysaved/:key
 GET /spotify/auth/start
@@ -83,6 +84,16 @@ GET /stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key
     "label": "Steam Playtime",
     "failed": false,
     "count": 1532.4,
+    "unit": "hours",
+    "updatedAt": "2026-02-17T03:34:00Z"
+  },
+  {
+    "source": "steam2weekstime",
+    "key": "76561198000000000",
+    "metric": "playtime_2weeks",
+    "label": "Steam Playtime (2 Weeks)",
+    "failed": false,
+    "count": 12.5,
     "unit": "hours",
     "updatedAt": "2026-02-17T03:34:00Z"
   },
@@ -282,9 +293,9 @@ docker compose up -d
 
 ```bash
 export GOSTATS_IMAGE="ghcr.io/<owner>/<repo>:latest"
-export CORS_ALLOWED_ORIGINS="https://your-blog.example"
-export TRUST_PROXY_HEADERS="true"
 ```
+
+`docker-compose.yml` 默认只指定镜像与挂载，业务配置统一从 `config.yml` 读取，避免双处维护。
 
 本地自行构建镜像（可选）:
 
@@ -298,20 +309,48 @@ docker build -t gostats:local .
 docker run --rm -p 8080:8080 \
   -v "$(pwd)/config.yml:/config.yml:ro" \
   -v "$(pwd)/data:/data" \
-  -e CORS_ALLOWED_ORIGINS='https://your-blog.example' \
-  -e TRUST_PROXY_HEADERS=true \
-  -e SPOTIFY_REFRESH_TOKEN_FILE=/data/spotify_refresh_token \
-  -e SPOTIFY_REFRESH_TOKEN_PERSIST_CMD='your_secret_manager_command' \
   gostats:local
 ```
 
 说明:
-- 推荐把大部分配置写在 `config.yml`，容器只注入少量运行期覆盖参数。
+- 推荐把配置都写在 `config.yml`，容器内通过 `CONFIG_FILE=/config.yml` 自动读取。
 - 镜像默认 `CONFIG_FILE=/config.yml`，因此只挂载 `config.yml` 就会自动读取。
-- 服务启动后会优先读取 `SPOTIFY_REFRESH_TOKEN_FILE` 中的 token。
+- 服务启动后会优先读取 `config.yml` 里配置的 `spotify.refresh_token_file` 中的 token。
 - 当 Spotify 返回新的 refresh token（轮换）时，会自动原子写回该文件。
-- 如果设置了 `SPOTIFY_REFRESH_TOKEN_PERSIST_CMD`，每次轮换都会执行该命令，并通过环境变量注入 `SPOTIFY_REFRESH_TOKEN`。
+- 如果在 `config.yml` 设置了 `spotify.refresh_token_persist_cmd`，每次轮换都会执行该命令，并通过环境变量注入 `SPOTIFY_REFRESH_TOKEN`。
 - 容器重启后，只要挂载目录还在，就能继续用最新 token 自动刷新。
+
+Cloudflare Tunnel / 反向代理部署建议:
+
+- `server.trust_proxy_headers` 设为 `true`（仅在你信任代理时）。
+- `spotify.redirect_uri` 建议显式写死为公网回调地址，例如: `https://stats.example.com/spotify/auth/callback`。
+- Spotify Dashboard 的 Redirect URI 必须与上面配置逐字符一致。
+
+回调 `502` 常见排查（容器场景）:
+
+1. 看状态:
+```bash
+curl -s https://your-domain.example/spotify/auth/status
+```
+若 `configured=true` 且 `hasRefreshToken=false`，通常是回调阶段换 token 或持久化失败。
+
+2. 确认 token 持久化路径:
+```yaml
+spotify:
+  refresh_token_file: "/data/spotify_refresh_token"
+```
+
+3. 确认宿主机挂载目录权限（distroless `nonroot` 用户）:
+```bash
+mkdir -p data
+chown -R 65532:65532 data
+chmod 700 data
+```
+
+4. 重启并重新走一次授权（`code` 一次性，不能复用旧 callback URL）:
+```bash
+docker compose up -d --force-recreate
+```
 
 ### Secret Manager 自动写回示例
 

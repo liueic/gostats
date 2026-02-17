@@ -80,7 +80,7 @@ func (f *fakeUpstream) handleSteam(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.steamOwnedCalls++
 		f.mu.Unlock()
-		_, _ = w.Write([]byte(`{"response":{"game_count":2,"games":[{"playtime_forever":60},{"playtime_forever":30}]}}`))
+		_, _ = w.Write([]byte(`{"response":{"game_count":2,"games":[{"playtime_forever":60,"playtime_2weeks":15},{"playtime_forever":30,"playtime_2weeks":45}]}}`))
 	default:
 		http.NotFound(w, r)
 	}
@@ -198,7 +198,7 @@ func TestServerStatsJSONIntegrationAndCache(t *testing.T) {
 		if err := json.Unmarshal(rr.Body.Bytes(), &items); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if len(items) != 5 {
+		if len(items) != 6 {
 			t.Fatalf("unexpected item count: %d", len(items))
 		}
 		for _, item := range items {

@@ -14,9 +14,10 @@ import (
 const steamBaseURL = "https://api.steampowered.com"
 
 type OwnedGamesSummary struct {
-	SteamID      string
-	GameCount    int
-	TotalMinutes int
+	SteamID       string
+	GameCount     int
+	TotalMinutes  int
+	RecentMinutes int
 }
 
 type SteamClient struct {
@@ -80,6 +81,7 @@ func (c *SteamClient) OwnedGamesSummary(ctx context.Context, idOrVanity string) 
 			GameCount int `json:"game_count"`
 			Games     []struct {
 				PlaytimeForever int `json:"playtime_forever"`
+				Playtime2Weeks  int `json:"playtime_2weeks"`
 			} `json:"games"`
 		} `json:"response"`
 	}
@@ -88,14 +90,17 @@ func (c *SteamClient) OwnedGamesSummary(ctx context.Context, idOrVanity string) 
 	}
 
 	totalMinutes := 0
+	recentMinutes := 0
 	for _, game := range payload.Response.Games {
 		totalMinutes += game.PlaytimeForever
+		recentMinutes += game.Playtime2Weeks
 	}
 
 	return OwnedGamesSummary{
-		SteamID:      steamID,
-		GameCount:    payload.Response.GameCount,
-		TotalMinutes: totalMinutes,
+		SteamID:       steamID,
+		GameCount:     payload.Response.GameCount,
+		TotalMinutes:  totalMinutes,
+		RecentMinutes: recentMinutes,
 	}, nil
 }
 
