@@ -1,0 +1,9 @@
+.git
+.github
+config.yml
+data
+dist
+gostats
+*.log
+*.tmp
+tmp

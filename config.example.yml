@@ -1,0 +1,56 @@
+# Copy this file to config.yml and fill your own keys.
+# cp config.example.yml config.yml
+
+server:
+  port: "8080"
+  # Set true only when running behind a trusted reverse proxy (Nginx/Caddy/Ingress).
+  trust_proxy_headers: "false"
+  read_header_timeout: "5s"
+  read_timeout: "15s"
+  write_timeout: "15s"
+  idle_timeout: "60s"
+
+cache:
+  ttl: "5m"
+
+http:
+  timeout: "10s"
+
+cors:
+  # Comma-separated allowlist.
+  # Example: "https://blog.example.com,https://www.blog.example.com"
+  # Empty means block cross-origin browser requests.
+  # Use "*" only if you explicitly need public cross-origin access.
+  allowed_origins: ""
+
+github:
+  # Optional.
+  token: ""
+
+steam:
+  # Required if you need steamgames/steamtime endpoints.
+  api_key: ""
+
+spotify:
+  # Required if you need spotifyplaying/spotifysaved endpoints.
+  client_id: ""
+  client_secret: ""
+
+  # Optional. If empty, service will infer:
+  #   {request_scheme}://{request_host}/spotify/auth/callback
+  # Make sure this URI is whitelisted in Spotify Dashboard.
+  redirect_uri: ""
+  oauth_scopes: "user-read-currently-playing user-read-recently-played user-library-read"
+
+  # One of these refresh token sources must be available:
+  # 1) refresh_token (inline string)
+  # 2) refresh_token_file (recommended for container volume persistence)
+  # You can leave both empty at first and run /spotify/auth/start once.
+  refresh_token: ""
+  refresh_token_file: "./data/spotify_refresh_token"
+
+  # Optional: execute command whenever token rotates.
+  # SPOTIFY_REFRESH_TOKEN will be injected into command environment.
+  # Example (AWS):
+  # refresh_token_persist_cmd: 'aws secretsmanager put-secret-value --secret-id prod/gostats/spotify-refresh-token --secret-string "$SPOTIFY_REFRESH_TOKEN"'
+  refresh_token_persist_cmd: ""
