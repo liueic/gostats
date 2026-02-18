@@ -131,11 +131,11 @@ var indexPageTemplate = template.Must(template.New("index").Parse(`<!doctype htm
       <h1>一个给静态博客用的实时数据后端</h1>
       <p>
         gostats 用来给 Astro/Hexo 这类无后端站点提供统一 JSON 接口。
-        你可以在这里快速生成 GitHub / Steam / Spotify 的 API URL，直接复制到前端页面中使用。
+        你可以在这里快速生成 GitHub / Steam / Spotify / Bangumi 的 API URL，直接复制到前端页面中使用。
       </p>
       <div class="cards">
         <div class="card"><b>它解决什么问题？</b><br>静态博客无法直接安全访问第三方 API，这个服务负责统一拉取、清洗、缓存和输出。</div>
-        <div class="card"><b>支持哪些数据？</b><br>GitHub Followers、Steam 游戏总数/总时长/近 2 周时长、Spotify 当前播放与收藏曲目数。</div>
+        <div class="card"><b>支持哪些数据？</b><br>GitHub Followers、Steam 游戏总数/总时长/近 2 周时长、Spotify 当前播放与收藏曲目数、Bangumi 动画/游戏总收藏 + 在看/看过/想看（游戏对应在玩/玩过/想玩）。</div>
         <div class="card"><b>首次 Spotify 授权</b><br>打开 <code>/spotify/auth/start</code> 完成授权后，服务会自动保存并刷新 refresh token。</div>
       </div>
       <div class="howto">
@@ -161,6 +161,10 @@ var indexPageTemplate = template.Must(template.New("index").Parse(`<!doctype htm
         <div>
           <label for="spotifyKey">Spotify key（可选）</label>
           <input id="spotifyKey" value="me">
+        </div>
+        <div>
+          <label for="bangumiName">Bangumi 用户名（可选）</label>
+          <input id="bangumiName" placeholder="例如: your_username">
         </div>
       </div>
 
@@ -191,6 +195,7 @@ var indexPageTemplate = template.Must(template.New("index").Parse(`<!doctype htm
     const githubEl = document.getElementById("githubName");
     const steamEl = document.getElementById("steamID");
     const spotifyEl = document.getElementById("spotifyKey");
+    const bangumiEl = document.getElementById("bangumiName");
     const batchEl = document.getElementById("batchURL");
     const linksEl = document.getElementById("singleLinks");
     const buildBtn = document.getElementById("buildBtn");
@@ -203,11 +208,13 @@ var indexPageTemplate = template.Must(template.New("index").Parse(`<!doctype htm
       const github = githubEl.value.trim();
       const steam = steamEl.value.trim();
       const spotify = spotifyEl.value.trim();
+      const bangumi = bangumiEl.value.trim();
 
       const params = new URLSearchParams();
       if (github) params.set("github", github);
       if (steam) params.set("steam", steam);
       if (spotify) params.set("spotify", spotify);
+      if (bangumi) params.set("bangumi", bangumi);
 
       const query = params.toString();
       batchEl.value = query ? (base + "/stats.json?" + query) : (base + "/stats.json");
@@ -225,12 +232,22 @@ var indexPageTemplate = template.Must(template.New("index").Parse(`<!doctype htm
         items.push(["Spotify Playing", base + "/stats/spotifyplaying/" + encodeURIComponent(spotify)]);
         items.push(["Spotify Saved Tracks", base + "/stats/spotifysaved/" + encodeURIComponent(spotify)]);
       }
+      if (bangumi) {
+        items.push(["Bangumi Anime Collections", base + "/stats/bangumianime/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Game Collections", base + "/stats/bangumigame/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Anime Watching", base + "/stats/bangumianimewatching/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Anime Watched", base + "/stats/bangumianimewatched/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Anime Wish", base + "/stats/bangumianimewish/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Game Playing", base + "/stats/bangumigameplaying/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Game Played", base + "/stats/bangumigameplayed/" + encodeURIComponent(bangumi)]);
+        items.push(["Bangumi Game Wish", base + "/stats/bangumigamewish/" + encodeURIComponent(bangumi)]);
+      }
 
       linksEl.innerHTML = "";
       if (items.length === 0) {
         const p = document.createElement("div");
         p.className = "hint";
-        p.textContent = "请先填写至少一个参数（GitHub / Steam / Spotify）。";
+        p.textContent = "请先填写至少一个参数（GitHub / Steam / Spotify / Bangumi）。";
         linksEl.appendChild(p);
         return;
       }

@@ -38,8 +38,12 @@ func TestLoadParsesYAMLAndExpandsEnv(t *testing.T) {
 	if err := os.Setenv("TEST_GITHUB_TOKEN", "ghp_test_token"); err != nil {
 		t.Fatalf("set env: %v", err)
 	}
+	if err := os.Setenv("TEST_BANGUMI_ACCESS_TOKEN", "bgm_test_token"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
 	t.Cleanup(func() {
 		_ = os.Unsetenv("TEST_GITHUB_TOKEN")
+		_ = os.Unsetenv("TEST_BANGUMI_ACCESS_TOKEN")
 	})
 
 	content := `
@@ -51,6 +55,8 @@ cors:
   allowed_origins: "https://blog.example,https://www.blog.example"
 github:
   token: "${TEST_GITHUB_TOKEN}"
+bangumi:
+  access_token: "${TEST_BANGUMI_ACCESS_TOKEN}"
 spotify:
   redirect_uri: "https://example.com/spotify/auth/callback"
   oauth_scopes: "user-library-read"
@@ -82,6 +88,9 @@ spotify:
 	if cfg.GitHub.Token != "ghp_test_token" {
 		t.Fatalf("unexpected github token: %q", cfg.GitHub.Token)
 	}
+	if cfg.Bangumi.AccessToken != "bgm_test_token" {
+		t.Fatalf("unexpected bangumi access token: %q", cfg.Bangumi.AccessToken)
+	}
 	if cfg.Spotify.RefreshTokenFile != "./token" {
 		t.Fatalf("unexpected refresh token file: %q", cfg.Spotify.RefreshTokenFile)
 	}
@@ -105,6 +114,9 @@ func TestApplyEnvOverrides(t *testing.T) {
 	if err := os.Setenv("TRUST_PROXY_HEADERS", "true"); err != nil {
 		t.Fatalf("set env TRUST_PROXY_HEADERS: %v", err)
 	}
+	if err := os.Setenv("BANGUMI_ACCESS_TOKEN", "bgm_access_token"); err != nil {
+		t.Fatalf("set env BANGUMI_ACCESS_TOKEN: %v", err)
+	}
 	if err := os.Setenv("CORS_ALLOWED_ORIGINS", "https://blog.example"); err != nil {
 		t.Fatalf("set env CORS_ALLOWED_ORIGINS: %v", err)
 	}
@@ -115,6 +127,7 @@ func TestApplyEnvOverrides(t *testing.T) {
 		_ = os.Unsetenv("PORT")
 		_ = os.Unsetenv("STEAM_API_KEY")
 		_ = os.Unsetenv("TRUST_PROXY_HEADERS")
+		_ = os.Unsetenv("BANGUMI_ACCESS_TOKEN")
 		_ = os.Unsetenv("CORS_ALLOWED_ORIGINS")
 		_ = os.Unsetenv("SPOTIFY_REFRESH_TOKEN_FILE")
 	})
@@ -130,6 +143,9 @@ func TestApplyEnvOverrides(t *testing.T) {
 	}
 	if cfg.Server.TrustProxyHeaders != "true" {
 		t.Fatalf("unexpected overridden trust_proxy_headers: %q", cfg.Server.TrustProxyHeaders)
+	}
+	if cfg.Bangumi.AccessToken != "bgm_access_token" {
+		t.Fatalf("unexpected overridden bangumi access token: %q", cfg.Bangumi.AccessToken)
 	}
 	if cfg.CORS.AllowedOrigins != "https://blog.example" {
 		t.Fatalf("unexpected overridden cors.allowed_origins: %q", cfg.CORS.AllowedOrigins)

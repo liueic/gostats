@@ -104,6 +104,10 @@ func assignConfigValue(cfg *Config, section, key, value string) {
 		if key == "api_key" {
 			cfg.Steam.APIKey = value
 		}
+	case "bangumi":
+		if key == "access_token" {
+			cfg.Bangumi.AccessToken = value
+		}
 	case "spotify":
 		switch key {
 		case "client_id":

@@ -31,6 +31,11 @@ steam:
   # Required if you need steamgames/steamtime endpoints.
   api_key: ""
 
+bangumi:
+  # Optional but recommended. Personal Access Token for higher quota and private collection access.
+  # Create at: https://next.bgm.tv/demo/access-token
+  access_token: ""
+
 spotify:
   # Required if you need spotifyplaying/spotifysaved endpoints.
   client_id: ""

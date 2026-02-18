@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ type Server struct {
 	github             *provider.GitHubClient
 	steam              *provider.SteamClient
 	spotify            *provider.SpotifyClient
+	bangumi            *provider.BangumiClient
 	spotifyRedirectURI string
 	spotifyOAuthScopes string
 	trustProxyHeaders  bool
@@ -34,7 +36,7 @@ type Options struct {
 	CORSAllowedOrigins []string
 }
 
-func New(github *provider.GitHubClient, steam *provider.SteamClient, spotify *provider.SpotifyClient, opts Options) *Server {
+func New(github *provider.GitHubClient, steam *provider.SteamClient, spotify *provider.SpotifyClient, bangumi *provider.BangumiClient, opts Options) *Server {
 	if opts.CacheTTL <= 0 {
 		opts.CacheTTL = 5 * time.Minute
 	}
@@ -46,6 +48,7 @@ func New(github *provider.GitHubClient, steam *provider.SteamClient, spotify *pr
 		github:             github,
 		steam:              steam,
 		spotify:            spotify,
+		bangumi:            bangumi,
 		spotifyRedirectURI: strings.TrimSpace(opts.SpotifyRedirectURI),
 		spotifyOAuthScopes: strings.TrimSpace(opts.SpotifyOAuthScopes),
 		trustProxyHeaders:  opts.TrustProxyHeaders,
@@ -93,7 +96,15 @@ func indexEndpoints() []string {
 		"/stats/steam2weekstime/:steamid_or_vanity",
 		"/stats/spotifyplaying/:key",
 		"/stats/spotifysaved/:key",
-		"/stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key",
+		"/stats/bangumianime/:username",
+		"/stats/bangumigame/:username",
+		"/stats/bangumianimewatching/:username",
+		"/stats/bangumianimewatched/:username",
+		"/stats/bangumianimewish/:username",
+		"/stats/bangumigameplaying/:username",
+		"/stats/bangumigameplayed/:username",
+		"/stats/bangumigamewish/:username",
+		"/stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key&bangumi=:username",
 	}
 }
 
@@ -147,6 +158,22 @@ func (s *Server) handleStatsBySource(w http.ResponseWriter, r *http.Request) {
 		stat = s.spotifyPlayingStat(r, key)
 	case "spotifysaved":
 		stat = s.spotifySavedTracksStat(r, key)
+	case "bangumianime":
+		stat = s.bangumiAnimeCollectionsStat(r, key)
+	case "bangumigame":
+		stat = s.bangumiGameCollectionsStat(r, key)
+	case "bangumianimewatching":
+		stat = s.bangumiAnimeWatchingStat(r, key)
+	case "bangumianimewatched":
+		stat = s.bangumiAnimeWatchedStat(r, key)
+	case "bangumianimewish":
+		stat = s.bangumiAnimeWishStat(r, key)
+	case "bangumigameplaying":
+		stat = s.bangumiGamePlayingStat(r, key)
+	case "bangumigameplayed":
+		stat = s.bangumiGamePlayedStat(r, key)
+	case "bangumigamewish":
+		stat = s.bangumiGameWishStat(r, key)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unsupported source"})
 		return
@@ -164,12 +191,13 @@ func (s *Server) handleBatchStats(w http.ResponseWriter, r *http.Request) {
 	githubKey := strings.TrimSpace(r.URL.Query().Get("github"))
 	steamKey := strings.TrimSpace(r.URL.Query().Get("steam"))
 	spotifyKey := strings.TrimSpace(r.URL.Query().Get("spotify"))
-	if githubKey == "" && steamKey == "" && spotifyKey == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provide query github and/or steam and/or spotify"})
+	bangumiKey := strings.TrimSpace(r.URL.Query().Get("bangumi"))
+	if githubKey == "" && steamKey == "" && spotifyKey == "" && bangumiKey == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provide query github and/or steam and/or spotify and/or bangumi"})
 		return
 	}
 
-	stats := make([]model.StatResponse, 0, 6)
+	stats := make([]model.StatResponse, 0, 14)
 	if githubKey != "" {
 		stats = append(stats, s.githubFollowersStat(r, githubKey))
 	}
@@ -197,6 +225,19 @@ func (s *Server) handleBatchStats(w http.ResponseWriter, r *http.Request) {
 		stats = append(stats,
 			s.spotifyPlayingStat(r, spotifyKey),
 			s.spotifySavedTracksStat(r, spotifyKey),
+		)
+	}
+
+	if bangumiKey != "" {
+		stats = append(stats,
+			s.bangumiAnimeCollectionsStat(r, bangumiKey),
+			s.bangumiGameCollectionsStat(r, bangumiKey),
+			s.bangumiAnimeWatchingStat(r, bangumiKey),
+			s.bangumiAnimeWatchedStat(r, bangumiKey),
+			s.bangumiAnimeWishStat(r, bangumiKey),
+			s.bangumiGamePlayingStat(r, bangumiKey),
+			s.bangumiGamePlayedStat(r, bangumiKey),
+			s.bangumiGameWishStat(r, bangumiKey),
 		)
 	}
 
@@ -274,6 +315,118 @@ func (s *Server) spotifySavedTracksStat(r *http.Request, key string) model.StatR
 	return newOKStat("spotifysaved", key, "saved_tracks", "Spotify Saved Tracks", count, "tracks")
 }
 
+func (s *Server) bangumiAnimeCollectionsStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumianime",
+		"collections",
+		"Bangumi Anime Collections",
+		provider.BangumiSubjectAnime,
+		provider.BangumiCollectionAll,
+	)
+}
+
+func (s *Server) bangumiGameCollectionsStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumigame",
+		"collections",
+		"Bangumi Game Collections",
+		provider.BangumiSubjectGame,
+		provider.BangumiCollectionAll,
+	)
+}
+
+func (s *Server) bangumiAnimeWatchingStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumianimewatching",
+		"watching",
+		"Bangumi Anime Watching",
+		provider.BangumiSubjectAnime,
+		provider.BangumiCollectionDo,
+	)
+}
+
+func (s *Server) bangumiAnimeWatchedStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumianimewatched",
+		"watched",
+		"Bangumi Anime Watched",
+		provider.BangumiSubjectAnime,
+		provider.BangumiCollectionCollect,
+	)
+}
+
+func (s *Server) bangumiAnimeWishStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumianimewish",
+		"wish",
+		"Bangumi Anime Wish",
+		provider.BangumiSubjectAnime,
+		provider.BangumiCollectionWish,
+	)
+}
+
+func (s *Server) bangumiGamePlayingStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumigameplaying",
+		"playing",
+		"Bangumi Game Playing",
+		provider.BangumiSubjectGame,
+		provider.BangumiCollectionDo,
+	)
+}
+
+func (s *Server) bangumiGamePlayedStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumigameplayed",
+		"played",
+		"Bangumi Game Played",
+		provider.BangumiSubjectGame,
+		provider.BangumiCollectionCollect,
+	)
+}
+
+func (s *Server) bangumiGameWishStat(r *http.Request, username string) model.StatResponse {
+	return s.bangumiCollectionsStat(
+		r,
+		username,
+		"bangumigamewish",
+		"wish",
+		"Bangumi Game Wish",
+		provider.BangumiSubjectGame,
+		provider.BangumiCollectionWish,
+	)
+}
+
+func (s *Server) bangumiCollectionsStat(
+	r *http.Request,
+	username string,
+	source string,
+	metric string,
+	label string,
+	subjectType int,
+	collectionType int,
+) model.StatResponse {
+	summary, err := s.bangumiCollectionsCached(r, username, subjectType, collectionType)
+	if err != nil {
+		return newErrStat(source, username, metric, label, "items", err)
+	}
+	return newOKStat(source, username, metric, label, summary.Total, "items")
+}
+
 func (s *Server) githubFollowersCached(r *http.Request, username string) (int, error) {
 	key := "github:" + strings.ToLower(strings.TrimSpace(username))
 	if cached, ok := s.cache.Get(key); ok {
@@ -285,6 +438,26 @@ func (s *Server) githubFollowersCached(r *http.Request, username string) (int, e
 	value, err := s.github.Followers(r.Context(), username)
 	if err != nil {
 		return 0, err
+	}
+	s.cache.Set(key, value)
+	return value, nil
+}
+
+func (s *Server) bangumiCollectionsCached(r *http.Request, username string, subjectType int, collectionType int) (provider.BangumiCollectionSummary, error) {
+	key := "bangumi:" + strings.ToLower(strings.TrimSpace(username)) + ":" + strconv.Itoa(subjectType) + ":" + strconv.Itoa(collectionType)
+	if cached, ok := s.cache.Get(key); ok {
+		if value, valid := cached.(provider.BangumiCollectionSummary); valid {
+			return value, nil
+		}
+	}
+
+	if s.bangumi == nil {
+		return provider.BangumiCollectionSummary{}, errors.New("bangumi client is not configured")
+	}
+
+	value, err := s.bangumi.CollectionsTotalByType(r.Context(), username, subjectType, collectionType)
+	if err != nil {
+		return provider.BangumiCollectionSummary{}, err
 	}
 	s.cache.Set(key, value)
 	return value, nil

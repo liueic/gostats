@@ -8,10 +8,11 @@
 
 - `GET /stats/:source/:key` 单指标接口（兼容 substats 风格）
 - `GET /stats.json` 标准化数组接口（适合前端一次性拉取）
-- `GET /` 可视化导航面板（可直接填写 GitHub/Steam 参数并组装 URL）
+- `GET /` 可视化导航面板（可直接填写 GitHub/Steam/Spotify/Bangumi 参数并组装 URL）
 - 支持 GitHub followers
 - 支持 Steam 游戏总数、总游戏时长、近 2 周游戏时长
 - 支持 Spotify 当前播放/最近播放回退、收藏歌曲总数
+- 支持 Bangumi 个人动画/游戏收藏总数，以及在看/看过/想看（游戏对应在玩/玩过/想玩）数量
 - 内置 Spotify OAuth 首次授权流程（服务端自动换取并持久化 refresh token）
 - 内置短 TTL 内存缓存，降低外部 API 限流风险
 
@@ -26,12 +27,21 @@ GET /stats/steamtime/:steamid_or_vanity
 GET /stats/steam2weekstime/:steamid_or_vanity
 GET /stats/spotifyplaying/:key
 GET /stats/spotifysaved/:key
+GET /stats/bangumianime/:username
+GET /stats/bangumigame/:username
+GET /stats/bangumianimewatching/:username
+GET /stats/bangumianimewatched/:username
+GET /stats/bangumianimewish/:username
+GET /stats/bangumigameplaying/:username
+GET /stats/bangumigameplayed/:username
+GET /stats/bangumigamewish/:username
 GET /spotify/auth/start
 GET /spotify/auth/callback
 GET /spotify/auth/status
 ```
 
 `spotify` 的 `:key` 当前仅用于占位和缓存隔离，建议传 `me`。
+`bangumi` 状态映射: `wish=想看(想玩)`、`watched/played=看过(玩过)`、`watching/playing=在看(在玩)`。
 
 返回示例:
 
@@ -51,7 +61,7 @@ GET /spotify/auth/status
 ### 2) 标准化数组
 
 ```txt
-GET /stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key
+GET /stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key&bangumi=:username
 ```
 
 返回示例:
@@ -126,6 +136,56 @@ GET /stats.json?github=:username&steam=:steamid_or_vanity&spotify=:key
     "count": 999,
     "unit": "tracks",
     "updatedAt": "2026-02-17T03:34:00Z"
+  },
+  {
+    "source": "bangumianime",
+    "key": "your_username",
+    "metric": "collections",
+    "label": "Bangumi Anime Collections",
+    "failed": false,
+    "count": 321,
+    "unit": "items",
+    "updatedAt": "2026-02-17T03:34:00Z"
+  },
+  {
+    "source": "bangumigame",
+    "key": "your_username",
+    "metric": "collections",
+    "label": "Bangumi Game Collections",
+    "failed": false,
+    "count": 45,
+    "unit": "items",
+    "updatedAt": "2026-02-17T03:34:00Z"
+  },
+  {
+    "source": "bangumianimewatching",
+    "key": "your_username",
+    "metric": "watching",
+    "label": "Bangumi Anime Watching",
+    "failed": false,
+    "count": 12,
+    "unit": "items",
+    "updatedAt": "2026-02-17T03:34:00Z"
+  },
+  {
+    "source": "bangumianimewatched",
+    "key": "your_username",
+    "metric": "watched",
+    "label": "Bangumi Anime Watched",
+    "failed": false,
+    "count": 200,
+    "unit": "items",
+    "updatedAt": "2026-02-17T03:34:00Z"
+  },
+  {
+    "source": "bangumianimewish",
+    "key": "your_username",
+    "metric": "wish",
+    "label": "Bangumi Anime Wish",
+    "failed": false,
+    "count": 109,
+    "unit": "items",
+    "updatedAt": "2026-02-17T03:34:00Z"
   }
 ]
 ```
@@ -158,6 +218,7 @@ go run ./cmd/gostats
 - `CORS_ALLOWED_ORIGINS` (可选。逗号分隔白名单，例如 `https://blog.example.com,https://www.blog.example.com`。默认空=拒绝跨域浏览器访问)
 - `GITHUB_TOKEN` (可选，提升 GitHub API 限额)
 - `STEAM_API_KEY` (Steam 功能必需)
+- `BANGUMI_ACCESS_TOKEN` (可选，推荐配置，便于访问私有收藏和提升配额)
 - `SPOTIFY_CLIENT_ID` (Spotify 必需)
 - `SPOTIFY_CLIENT_SECRET` (Spotify 必需)
 - `SPOTIFY_REDIRECT_URI` (可选。默认自动推断为 `{scheme}://{host}/spotify/auth/callback`)
@@ -216,7 +277,26 @@ steam:
 注意:
 - 如果要拿到完整游戏数据，你的 Steam 个人资料和游戏详情需要是公开可见，否则可能返回空或不完整数据。
 
-### 3) Spotify 凭证（必需）
+### 3) Bangumi Access Token（可选，推荐）
+
+1. 打开 Bangumi Access Token 页面:
+   - <https://next.bgm.tv/demo/access-token>
+2. 生成 token 后配置环境变量:
+
+```bash
+export BANGUMI_ACCESS_TOKEN="bgm_pat_xxx"
+```
+
+或写入 `config.yml`:
+
+```yaml
+bangumi:
+  access_token: "bgm_pat_xxx"
+```
+
+不配置 token 也可以查询公开用户数据，但可能受限。
+
+### 4) Spotify 凭证（必需）
 
 你至少需要 2 个值：`SPOTIFY_CLIENT_ID`、`SPOTIFY_CLIENT_SECRET`。  
 `SPOTIFY_REFRESH_TOKEN` 可以留空，服务支持首次授权时自动获取并保存。
@@ -277,7 +357,7 @@ go run ./cmd/gostats
 另开一个终端测试:
 
 ```bash
-curl "http://127.0.0.1:8080/stats.json?github=spencerwooo&steam=76561198000000000&spotify=me"
+curl "http://127.0.0.1:8080/stats.json?github=spencerwooo&steam=76561198000000000&spotify=me&bangumi=your_username"
 ```
 
 ## Docker
@@ -388,7 +468,7 @@ docker pull ghcr.io/<owner>/<repo>:latest
 ## Hexo/Astro 前端调用示例
 
 ```js
-const res = await fetch("https://your-domain.example/stats.json?github=spencerwooo&steam=76561198000000000&spotify=me");
+const res = await fetch("https://your-domain.example/stats.json?github=spencerwooo&steam=76561198000000000&spotify=me&bangumi=your_username");
 const stats = await res.json();
 
 for (const item of stats) {

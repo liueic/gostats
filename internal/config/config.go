@@ -13,6 +13,7 @@ type Config struct {
 	CORS    CORSConfig    `yaml:"cors"`
 	GitHub  GitHubConfig  `yaml:"github"`
 	Steam   SteamConfig   `yaml:"steam"`
+	Bangumi BangumiConfig `yaml:"bangumi"`
 	Spotify SpotifyConfig `yaml:"spotify"`
 }
 
@@ -43,6 +44,10 @@ type GitHubConfig struct {
 
 type SteamConfig struct {
 	APIKey string `yaml:"api_key"`
+}
+
+type BangumiConfig struct {
+	AccessToken string `yaml:"access_token"`
 }
 
 type SpotifyConfig struct {
@@ -149,6 +154,7 @@ func (c *Config) ApplyEnvOverrides() {
 
 	c.GitHub.Token = envOr("GITHUB_TOKEN", c.GitHub.Token)
 	c.Steam.APIKey = envOr("STEAM_API_KEY", c.Steam.APIKey)
+	c.Bangumi.AccessToken = envOr("BANGUMI_ACCESS_TOKEN", c.Bangumi.AccessToken)
 
 	c.Spotify.ClientID = envOr("SPOTIFY_CLIENT_ID", c.Spotify.ClientID)
 	c.Spotify.ClientSecret = envOr("SPOTIFY_CLIENT_SECRET", c.Spotify.ClientSecret)

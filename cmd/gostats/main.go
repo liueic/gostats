@@ -29,6 +29,7 @@ func main() {
 	port := cfg.Server.Port
 	githubToken := cfg.GitHub.Token
 	steamAPIKey := cfg.Steam.APIKey
+	bangumiAccessToken := cfg.Bangumi.AccessToken
 	spotifyClientID := cfg.Spotify.ClientID
 	spotifyClientSecret := cfg.Spotify.ClientSecret
 	spotifyRedirectURI := cfg.Spotify.RedirectURI
@@ -52,6 +53,7 @@ func main() {
 	client := &http.Client{Timeout: httpTimeout}
 	githubClient := provider.NewGitHubClient(client, githubToken)
 	steamClient := provider.NewSteamClient(client, steamAPIKey)
+	bangumiClient := provider.NewBangumiClient(client, bangumiAccessToken)
 	stores := make([]provider.RefreshTokenStore, 0, 2)
 	if spotifyRefreshTokenFile != "" {
 		stores = append(stores, provider.NewFileRefreshTokenStore(spotifyRefreshTokenFile))
@@ -71,7 +73,7 @@ func main() {
 	}
 
 	spotifyClient := provider.NewSpotifyClient(client, spotifyClientID, spotifyClientSecret, spotifyRefreshToken, spotifyStore)
-	srv := server.New(githubClient, steamClient, spotifyClient, server.Options{
+	srv := server.New(githubClient, steamClient, spotifyClient, bangumiClient, server.Options{
 		CacheTTL:           cacheTTL,
 		SpotifyRedirectURI: spotifyRedirectURI,
 		SpotifyOAuthScopes: spotifyOAuthScopes,
@@ -81,6 +83,9 @@ func main() {
 
 	if steamAPIKey == "" {
 		log.Printf("STEAM_API_KEY is empty. Steam endpoints will return failed=true")
+	}
+	if bangumiAccessToken == "" {
+		log.Printf("BANGUMI_ACCESS_TOKEN is empty. Bangumi endpoints can only access public data")
 	}
 	if spotifyClientID == "" || spotifyClientSecret == "" {
 		log.Printf("Spotify oauth config is incomplete. Set client_id/client_secret to enable spotify endpoints")

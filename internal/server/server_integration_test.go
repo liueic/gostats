@@ -33,13 +33,21 @@ func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 type fakeUpstream struct {
 	mu sync.Mutex
 
-	githubCalls         int
-	steamResolveCalls   int
-	steamOwnedCalls     int
-	spotifyTokenCalls   int
-	spotifyCurrentCalls int
-	spotifySavedCalls   int
-	lastOAuthCode       string
+	githubCalls               int
+	steamResolveCalls         int
+	steamOwnedCalls           int
+	bangumiAnimeAllCalls      int
+	bangumiAnimeWatchingCalls int
+	bangumiAnimeWatchedCalls  int
+	bangumiAnimeWishCalls     int
+	bangumiGameAllCalls       int
+	bangumiGamePlayingCalls   int
+	bangumiGamePlayedCalls    int
+	bangumiGameWishCalls      int
+	spotifyTokenCalls         int
+	spotifyCurrentCalls       int
+	spotifySavedCalls         int
+	lastOAuthCode             string
 }
 
 func (f *fakeUpstream) handler(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +61,8 @@ func (f *fakeUpstream) handler(w http.ResponseWriter, r *http.Request) {
 		f.handleSpotifyAccounts(w, r)
 	case "api.spotify.com":
 		f.handleSpotifyAPI(w, r)
+	case "api.bgm.tv":
+		f.handleBangumi(w, r)
 	default:
 		http.Error(w, "unknown host "+host, http.StatusBadRequest)
 	}
@@ -139,6 +149,75 @@ func (f *fakeUpstream) handleSpotifyAPI(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (f *fakeUpstream) handleBangumi(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.URL.Path, "/v0/users/") || !strings.HasSuffix(r.URL.Path, "/collections") {
+		http.NotFound(w, r)
+		return
+	}
+
+	subjectType := strings.TrimSpace(r.URL.Query().Get("subject_type"))
+	queryType := strings.TrimSpace(r.URL.Query().Get("type"))
+
+	switch {
+	case subjectType == "2":
+		f.mu.Lock()
+		switch queryType {
+		case "":
+			f.bangumiAnimeAllCalls++
+		case "3":
+			f.bangumiAnimeWatchingCalls++
+		case "2":
+			f.bangumiAnimeWatchedCalls++
+		case "1":
+			f.bangumiAnimeWishCalls++
+		default:
+			f.mu.Unlock()
+			http.Error(w, "invalid anime type", http.StatusBadRequest)
+			return
+		}
+		f.mu.Unlock()
+		switch queryType {
+		case "":
+			_, _ = w.Write([]byte(`{"total":321,"limit":1,"offset":0,"data":[]}`))
+		case "3":
+			_, _ = w.Write([]byte(`{"total":12,"limit":1,"offset":0,"data":[]}`))
+		case "2":
+			_, _ = w.Write([]byte(`{"total":200,"limit":1,"offset":0,"data":[]}`))
+		case "1":
+			_, _ = w.Write([]byte(`{"total":109,"limit":1,"offset":0,"data":[]}`))
+		}
+	case subjectType == "4":
+		f.mu.Lock()
+		switch queryType {
+		case "":
+			f.bangumiGameAllCalls++
+		case "3":
+			f.bangumiGamePlayingCalls++
+		case "2":
+			f.bangumiGamePlayedCalls++
+		case "1":
+			f.bangumiGameWishCalls++
+		default:
+			f.mu.Unlock()
+			http.Error(w, "invalid game type", http.StatusBadRequest)
+			return
+		}
+		f.mu.Unlock()
+		switch queryType {
+		case "":
+			_, _ = w.Write([]byte(`{"total":45,"limit":1,"offset":0,"data":[]}`))
+		case "3":
+			_, _ = w.Write([]byte(`{"total":4,"limit":1,"offset":0,"data":[]}`))
+		case "2":
+			_, _ = w.Write([]byte(`{"total":30,"limit":1,"offset":0,"data":[]}`))
+		case "1":
+			_, _ = w.Write([]byte(`{"total":11,"limit":1,"offset":0,"data":[]}`))
+		}
+	default:
+		http.Error(w, "invalid subject_type", http.StatusBadRequest)
+	}
+}
+
 func newServiceWithFakeUpstream(t *testing.T, refreshToken string, store provider.RefreshTokenStore, opts Options) (*Server, *fakeUpstream) {
 	t.Helper()
 
@@ -161,6 +240,7 @@ func newServiceWithFakeUpstream(t *testing.T, refreshToken string, store provide
 	github := provider.NewGitHubClient(httpClient, "gh")
 	steam := provider.NewSteamClient(httpClient, "steam")
 	spotify := provider.NewSpotifyClient(httpClient, "id", "secret", refreshToken, store)
+	bangumi := provider.NewBangumiClient(httpClient, "bgm-token")
 
 	if opts.CacheTTL <= 0 {
 		opts.CacheTTL = 5 * time.Minute
@@ -169,7 +249,7 @@ func newServiceWithFakeUpstream(t *testing.T, refreshToken string, store provide
 		opts.SpotifyRedirectURI = "https://blog.example/spotify/auth/callback"
 	}
 
-	return New(github, steam, spotify, opts), fake
+	return New(github, steam, spotify, bangumi, opts), fake
 }
 
 func TestServerStatsJSONIntegrationAndCache(t *testing.T) {
@@ -182,7 +262,7 @@ func TestServerStatsJSONIntegrationAndCache(t *testing.T) {
 	handler := srv.Handler()
 
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/stats.json?github=alice&steam=myvanity&spotify=me", nil)
+		req := httptest.NewRequest(http.MethodGet, "/stats.json?github=alice&steam=myvanity&spotify=me&bangumi=alice", nil)
 		req.Header.Set("Origin", "https://blog.example")
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -198,7 +278,7 @@ func TestServerStatsJSONIntegrationAndCache(t *testing.T) {
 		if err := json.Unmarshal(rr.Body.Bytes(), &items); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if len(items) != 6 {
+		if len(items) != 14 {
 			t.Fatalf("unexpected item count: %d", len(items))
 		}
 		for _, item := range items {
@@ -219,6 +299,26 @@ func TestServerStatsJSONIntegrationAndCache(t *testing.T) {
 	}
 	if fake.spotifyTokenCalls != 1 || fake.spotifyCurrentCalls != 1 || fake.spotifySavedCalls != 1 {
 		t.Fatalf("expected spotify cached once, token=%d current=%d saved=%d", fake.spotifyTokenCalls, fake.spotifyCurrentCalls, fake.spotifySavedCalls)
+	}
+	if fake.bangumiAnimeAllCalls != 1 ||
+		fake.bangumiAnimeWatchingCalls != 1 ||
+		fake.bangumiAnimeWatchedCalls != 1 ||
+		fake.bangumiAnimeWishCalls != 1 ||
+		fake.bangumiGameAllCalls != 1 ||
+		fake.bangumiGamePlayingCalls != 1 ||
+		fake.bangumiGamePlayedCalls != 1 ||
+		fake.bangumiGameWishCalls != 1 {
+		t.Fatalf(
+			"expected bangumi cached once, animeAll=%d animeWatching=%d animeWatched=%d animeWish=%d gameAll=%d gamePlaying=%d gamePlayed=%d gameWish=%d",
+			fake.bangumiAnimeAllCalls,
+			fake.bangumiAnimeWatchingCalls,
+			fake.bangumiAnimeWatchedCalls,
+			fake.bangumiAnimeWishCalls,
+			fake.bangumiGameAllCalls,
+			fake.bangumiGamePlayingCalls,
+			fake.bangumiGamePlayedCalls,
+			fake.bangumiGameWishCalls,
+		)
 	}
 }
 

@@ -55,7 +55,7 @@ func (w *captureResponseWriter) Write(p []byte) (int, error) {
 func TestNewAppliesDefaults(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, nil, nil, Options{})
+	srv := New(nil, nil, nil, nil, Options{})
 	if srv.cache == nil {
 		t.Fatalf("cache should be initialized")
 	}
@@ -67,7 +67,7 @@ func TestNewAppliesDefaults(t *testing.T) {
 func TestIndexReturnsHTMLPanelAndJSONFallback(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, nil, nil, Options{})
+	srv := New(nil, nil, nil, nil, Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -104,7 +104,7 @@ func TestIndexReturnsHTMLPanelAndJSONFallback(t *testing.T) {
 func TestHandlerOptionsCORS(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, nil, nil, Options{CORSAllowedOrigins: []string{"https://blog.example"}})
+	srv := New(nil, nil, nil, nil, Options{CORSAllowedOrigins: []string{"https://blog.example"}})
 
 	req := httptest.NewRequest(http.MethodOptions, "/stats/github/alice", nil)
 	req.Header.Set("Origin", "https://blog.example")
@@ -130,7 +130,7 @@ func TestHandlerOptionsCORS(t *testing.T) {
 func TestIndexAndHealthMethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, nil, nil, Options{})
+	srv := New(nil, nil, nil, nil, Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -151,7 +151,7 @@ func TestIndexAndHealthMethodNotAllowed(t *testing.T) {
 func TestStatsBySourcePathAndMethodValidation(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, nil, nil, Options{})
+	srv := New(nil, nil, nil, nil, Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodPost, "/stats/github/alice", nil)
@@ -185,6 +185,7 @@ func TestBatchStatsValidationAndErrorStats(t *testing.T) {
 		provider.NewGitHubClient(&http.Client{Timeout: 2 * time.Second}, ""),
 		provider.NewSteamClient(&http.Client{Timeout: 2 * time.Second}, ""),
 		spotify,
+		nil,
 		Options{},
 	)
 	handler := srv.Handler()
@@ -222,6 +223,26 @@ func TestBatchStatsValidationAndErrorStats(t *testing.T) {
 			t.Fatalf("expected failed=true for config errors, item=%+v", item)
 		}
 	}
+
+	req = httptest.NewRequest(http.MethodGet, "/stats.json?bangumi=alice", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for bangumi error stats payload, got %d", rr.Code)
+	}
+
+	items = nil
+	if err := json.Unmarshal(rr.Body.Bytes(), &items); err != nil {
+		t.Fatalf("decode bangumi batch stats: %v", err)
+	}
+	if len(items) != 8 {
+		t.Fatalf("expected 8 bangumi stats items, got %d", len(items))
+	}
+	for _, item := range items {
+		if failed, _ := item["failed"].(bool); !failed {
+			t.Fatalf("expected bangumi failed=true for unconfigured client, item=%+v", item)
+		}
+	}
 }
 
 func TestStatsBySourceErrorPayload(t *testing.T) {
@@ -232,6 +253,7 @@ func TestStatsBySourceErrorPayload(t *testing.T) {
 		provider.NewGitHubClient(&http.Client{Timeout: 2 * time.Second}, ""),
 		provider.NewSteamClient(&http.Client{Timeout: 2 * time.Second}, ""),
 		spotify,
+		nil,
 		Options{},
 	)
 	handler := srv.Handler()
@@ -242,6 +264,14 @@ func TestStatsBySourceErrorPayload(t *testing.T) {
 		"/stats/steam2weekstime/%2520",
 		"/stats/spotifyplaying/me",
 		"/stats/spotifysaved/me",
+		"/stats/bangumianime/%2520",
+		"/stats/bangumigame/%2520",
+		"/stats/bangumianimewatching/%2520",
+		"/stats/bangumianimewatched/%2520",
+		"/stats/bangumianimewish/%2520",
+		"/stats/bangumigameplaying/%2520",
+		"/stats/bangumigameplayed/%2520",
+		"/stats/bangumigamewish/%2520",
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rr := httptest.NewRecorder()
@@ -264,7 +294,7 @@ func TestSpotifyAuthStartAndCallbackValidation(t *testing.T) {
 	t.Parallel()
 
 	configuredSpotify := provider.NewSpotifyClient(&http.Client{Timeout: 2 * time.Second}, "id", "secret", "", nil)
-	srv := New(nil, nil, configuredSpotify, Options{})
+	srv := New(nil, nil, configuredSpotify, nil, Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodPost, "/spotify/auth/start", nil)
@@ -320,7 +350,7 @@ func TestSpotifyAuthStartAndCallbackValidation(t *testing.T) {
 func TestSpotifyAuthStatusBranches(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, nil, nil, Options{})
+	srv := New(nil, nil, nil, nil, Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/spotify/auth/status", nil)
@@ -331,7 +361,7 @@ func TestSpotifyAuthStatusBranches(t *testing.T) {
 	}
 
 	errClient := provider.NewSpotifyClient(&http.Client{Timeout: 2 * time.Second}, "id", "secret", "", tokenStoreErr{err: errors.New("boom")})
-	srv = New(nil, nil, errClient, Options{})
+	srv = New(nil, nil, errClient, nil, Options{})
 	handler = srv.Handler()
 	req = httptest.NewRequest(http.MethodGet, "/spotify/auth/status", nil)
 	rr = httptest.NewRecorder()
